@@ -25,3 +25,22 @@ export async function createShortUrl(req: Request, res: Response) {
         return res.status(500).json({ error: "Failed to create short URL" })
     }
 }
+
+
+export async function handleRedirect(req: Request, res: Response) {
+    const { slug } = req.params;
+
+    const query = `SELECT destination_url FROM urls WHERE slug = $1 LIMIT 1`
+    const values = [slug]
+
+    try {
+        const result = await pool.query(query, values)
+
+        if (result.rows.length === 0) return res.status(404).json({ error: "URL not found" })
+
+        return res.status(302).redirect(result.rows[0].destination_url)
+    } catch (error) {
+        console.error("Error fetching destination URL:", error)
+        return res.status(500).json({ error: "Failed to fetch destination URL" })
+    }
+}
