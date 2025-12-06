@@ -1,5 +1,6 @@
 import express from 'express'
 import urlRouter from './routes/url.router'
+import "./config/redis"
 
 const app = express()
 app.use(express.json())
