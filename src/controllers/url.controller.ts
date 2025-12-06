@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { pool } from "../config/db";
 import { generateSlug } from "../utils/slug";
+import { redis } from "../config/redis";
 
 
 export async function createShortUrl(req: Request, res: Response) {
@@ -30,6 +31,12 @@ export async function createShortUrl(req: Request, res: Response) {
 export async function handleRedirect(req: Request, res: Response) {
     const { slug } = req.params;
 
+    const redisCacheKey = `url:${slug}`
+
+    const cache = await redis.get(redisCacheKey)
+
+    if (cache) return res.status(302).redirect(cache)
+
     const query = `SELECT destination_url FROM urls WHERE slug = $1 LIMIT 1`
     const values = [slug]
 
@@ -38,7 +45,11 @@ export async function handleRedirect(req: Request, res: Response) {
 
         if (result.rows.length === 0) return res.status(404).json({ error: "URL not found" })
 
-        return res.status(302).redirect(result.rows[0].destination_url)
+        const destination_url = result.rows[0].destination_url
+
+        await redis.set(redisCacheKey, destination_url, { EX: 60 * 60 * 24 }) // 24 TTL
+
+        return res.status(302).redirect(destination_url)
     } catch (error) {
         console.error("Error fetching destination URL:", error)
         return res.status(500).json({ error: "Failed to fetch destination URL" })
