@@ -1,10 +1,13 @@
-import Fastify from "fastify";
+import express from 'express'
 
-export function buildApp() {
-  const fastify = Fastify({ logger: true });
+const app = express()
 
-  // Register routes
-  fastify.register(import("./routes/example.route"));
+app.use(express.json())
 
-  return fastify;
-}
+
+// Routes
+
+// Global Error Handler (should be after routes)
+
+
+export default app;

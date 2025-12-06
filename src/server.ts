@@ -1,15 +1,10 @@
-import { buildApp } from "./app";
+import app from "./app";
+import config from "./config/config";
 
-async function start() {
-  const app = buildApp();
+app.get('/', (req, res) => {
+    res.send('Hello World!')
+})
 
-  try {
-    await app.listen({ port: 8000 });
-    console.log("Server running at http://localhost:8000");
-  } catch (err) {
-    app.log.error(err);
-    process.exit(1);
-  }
-}
-
-start();
+app.listen(config.port, () => {
+    console.log(`Server is running on port ${config.port}`);
+})
