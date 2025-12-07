@@ -31,28 +31,23 @@ export async function createShortUrl(req: Request, res: Response) {
 
 export async function handleRedirect(req: Request, res: Response) {
     const { slug } = req.params;
-
     const redisCacheKey = `url:${slug}`
 
     const cache = await redis.get(redisCacheKey)
 
-
     if (cache) {
         const [id, destination_url] = cache.split("|");
 
-        if (!id || !destination_url) {
-            await redis.del(redisCacheKey);
-            return handleRedirect(req, res);
+        if (id && destination_url) {
+            logClicks({
+                urlId: Number(id),
+                ip: req.ip ?? null,
+                userAgent: req.headers["user-agent"] || "",
+                referer: req.headers["referer"] || null
+            });
+            return res.status(302).redirect(destination_url)
         }
-
-        logClicks({
-            urlId: Number(id),
-            ip: req.ip ?? null,
-            userAgent: req.headers["user-agent"] || "",
-            referer: req.headers["referer"] || null
-        });
-
-        return res.status(302).redirect(destination_url)
+        await redis.del(redisCacheKey);
     }
 
     const query = `SELECT id, destination_url FROM urls WHERE slug = $1 LIMIT 1`
