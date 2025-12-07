@@ -32,7 +32,7 @@ This document provides high-level context for AI agents working on the `shortly`
 ## Database Schema Summary
 - **users**: `id`, `email`, `created_at`
 - **urls**: `id`, `user_id`, `slug`, `destination_url`, `created_at`
-- **url_clicks**: `id`, `url_id`, `ip_address`, `user_agent`, `referrer`
+- **clicks**: `id`, `url_id`, `ip_address`, `user_agent`, `referrer`
 
 ## Current Status
 - The project skeleton exists.
