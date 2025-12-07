@@ -78,6 +78,7 @@ shortly/
 │   ├── middlewares/    # Express middlewares
 │   ├── models/         # Database models/schemas
 │   ├── routes/         # API routes
+│   ├── utils/          # Utility functions
 │   ├── app.ts          # Express app setup
 │   └── server.ts       # Server entry point
 ├── dist/               # Compiled JavaScript
