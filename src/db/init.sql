@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS url_clicks (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   ip_address INET,
   user_agent TEXT,
-  referrer TEXT
+  referer TEXT
 );
 
 

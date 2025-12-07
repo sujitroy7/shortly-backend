@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { pool } from "../config/db";
 import { generateSlug } from "../utils/slug";
 import { redis } from "../config/redis";
+import { logClicks } from "../utils/logClick";
 
 
 export async function createShortUrl(req: Request, res: Response) {
@@ -35,9 +36,26 @@ export async function handleRedirect(req: Request, res: Response) {
 
     const cache = await redis.get(redisCacheKey)
 
-    if (cache) return res.status(302).redirect(cache)
 
-    const query = `SELECT destination_url FROM urls WHERE slug = $1 LIMIT 1`
+    if (cache) {
+        const [id, destination_url] = cache.split("|");
+
+        if (!id || !destination_url) {
+            await redis.del(redisCacheKey);
+            return handleRedirect(req, res);
+        }
+
+        logClicks({
+            urlId: Number(id),
+            ip: req.ip ?? null,
+            userAgent: req.headers["user-agent"] || "",
+            referer: req.headers["referer"] || null
+        });
+
+        return res.status(302).redirect(destination_url)
+    }
+
+    const query = `SELECT id, destination_url FROM urls WHERE slug = $1 LIMIT 1`
     const values = [slug]
 
     try {
@@ -45,9 +63,17 @@ export async function handleRedirect(req: Request, res: Response) {
 
         if (result.rows.length === 0) return res.status(404).json({ error: "URL not found" })
 
-        const destination_url = result.rows[0].destination_url
+        logClicks({
+            urlId: result.rows[0].id,
+            ip: req.ip ?? null,
+            userAgent: req.headers["user-agent"] || "",
+            referer: req.headers["referer"] || null
+        });
 
-        await redis.set(redisCacheKey, destination_url, { EX: 60 * 60 * 24 }) // 24 TTL
+        const { id, destination_url } = result.rows[0]
+
+
+        await redis.set(redisCacheKey, `${id}|${destination_url}`, { EX: 60 * 60 * 24 }) // 24 TTL
 
         return res.status(302).redirect(destination_url)
     } catch (error) {
