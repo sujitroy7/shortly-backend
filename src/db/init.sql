@@ -29,5 +29,5 @@ CREATE TABLE IF NOT EXISTS clicks (
 -- helpful indexes
 CREATE INDEX IF NOT EXISTS idx_urls_slug ON urls(slug);
 CREATE INDEX IF NOT EXISTS idx_clicks_url_id ON clicks(url_id);
-CREATE INDEX IF NOT EXISTS idx_clicks_url_id_clicked_at
-  ON clicks(url_id, clicked_at DESC);
+CREATE INDEX IF NOT EXISTS idx_clicks_url_id_created_at
+  ON clicks(url_id, created_at DESC);
