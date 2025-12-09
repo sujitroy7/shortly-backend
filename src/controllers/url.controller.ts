@@ -3,14 +3,19 @@ import { pool } from "../config/db";
 import { generateSlug } from "../utils/slug";
 import { redis } from "../config/redis";
 import { logClicks } from "../utils/logClick";
-
+import { createShortUrlSchema } from "../schemas/url.schemas";
 
 export async function createShortUrl(req: Request, res: Response) {
-    let { user_id, slug, destination_url } = req.body;
+    const validation = createShortUrlSchema.safeParse(req.body);
 
-    if (!user_id || !destination_url) {
-        return res.status(400).json({ error: "User ID and destination URL are required" })
+    if (!validation.success) {
+        return res.status(400).json({ 
+            error: "Validation failed", 
+            details: validation.error.format() 
+        });
     }
+
+    let { user_id, slug, destination_url } = validation.data;
 
     if (!slug) {
         slug = generateSlug()
