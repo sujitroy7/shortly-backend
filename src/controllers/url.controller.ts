@@ -86,3 +86,27 @@ export async function handleRedirect(req: Request, res: Response) {
     return res.status(500).json({ error: "Failed to fetch destination URL" });
   }
 }
+
+export async function checkSlugAvailability(req: Request, res: Response) {
+  const { slug } = req.params;
+
+  if (!slug || slug.trim() === "") {
+    return res.status(400).json({ error: "Slug is required" });
+  }
+
+  try {
+    const query = `SELECT id FROM urls WHERE slug = $1 LIMIT 1`;
+    const values = [slug];
+    const result = await pool.query(query, values);
+
+    const isAvailable = result.rows.length === 0;
+
+    return res.status(200).json({
+      slug,
+      available: isAvailable,
+    });
+  } catch (error) {
+    console.error("Error checking slug availability:", error);
+    return res.status(500).json({ error: "Failed to check slug availability" });
+  }
+}
