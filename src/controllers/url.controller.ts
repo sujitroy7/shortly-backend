@@ -6,78 +6,83 @@ import { logClicks } from "../utils/logClick";
 import { createShortUrlSchema } from "../schemas/url.schemas";
 
 export async function createShortUrl(req: Request, res: Response) {
-    const validation = createShortUrlSchema.safeParse(req.body);
+  const validation = createShortUrlSchema.safeParse(req.body);
 
-    if (!validation.success) {
-        return res.status(400).json({ 
-            error: "Validation failed", 
-            details: validation.error.format() 
-        });
-    }
+  if (!validation.success) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: validation.error.format(),
+    });
+  }
+  let { slug, destination_url } = validation.data;
 
-    let { user_id, slug, destination_url } = validation.data;
+  try {
+    const query = `INSERT INTO urls (user_id, destination_url) VALUES ($1, $2) RETURNING *`;
+    const user_id = 1;
+    const values = [user_id, destination_url];
+    const result = await pool.query(query, values);
 
     if (!slug) {
-        slug = generateSlug()
+      slug = generateSlug(result.rows[0].id);
     }
 
-    const query = `INSERT INTO urls (user_id, slug, destination_url) VALUES ($1, $2, $3) RETURNING *`
-    const values = [user_id, slug, destination_url]
+    const updateQuery = `UPDATE urls SET slug = $1 WHERE id = $2 RETURNING *`;
+    const updateValues = [slug, result.rows[0].id];
+    const updateResult = await pool.query(updateQuery, updateValues);
 
-    try {
-        const result = await pool.query(query, values);
-        return res.status(201).json({ status: 'success', data: result.rows })
-    } catch (error) {
-        console.error("Error creating short URL:", error)
-        return res.status(500).json({ error: "Failed to create short URL" })
-    }
+    return res.status(201).json({ status: "success", data: updateResult.rows });
+  } catch (error) {
+    console.error("Error creating short URL:", error);
+    return res.status(500).json({ error: "Failed to create short URL" });
+  }
 }
 
-
 export async function handleRedirect(req: Request, res: Response) {
-    const { slug } = req.params;
-    const redisCacheKey = `url:${slug}`
+  const { slug } = req.params;
+  const redisCacheKey = `url:${slug}`;
 
-    const cache = await redis.get(redisCacheKey)
+  const cache = await redis.get(redisCacheKey);
 
-    if (cache) {
-        const [id, destination_url] = cache.split("|");
+  if (cache) {
+    const [id, destination_url] = cache.split("|");
 
-        if (id && destination_url) {
-            logClicks({
-                urlId: Number(id),
-                ip: req.ip ?? null,
-                userAgent: req.headers["user-agent"] || "",
-                referer: req.headers["referer"] || null
-            });
-            return res.status(302).redirect(destination_url)
-        }
-        await redis.del(redisCacheKey);
+    if (id && destination_url) {
+      logClicks({
+        urlId: Number(id),
+        ip: req.ip ?? null,
+        userAgent: req.headers["user-agent"] || "",
+        referer: req.headers["referer"] || null,
+      });
+      return res.status(302).redirect(destination_url);
     }
+    await redis.del(redisCacheKey);
+  }
 
-    const query = `SELECT id, destination_url FROM urls WHERE slug = $1 LIMIT 1`
-    const values = [slug]
+  const query = `SELECT id, destination_url FROM urls WHERE slug = $1 LIMIT 1`;
+  const values = [slug];
 
-    try {
-        const result = await pool.query(query, values)
+  try {
+    const result = await pool.query(query, values);
 
-        if (result.rows.length === 0) return res.status(404).json({ error: "URL not found" })
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "URL not found" });
 
-        logClicks({
-            urlId: result.rows[0].id,
-            ip: req.ip ?? null,
-            userAgent: req.headers["user-agent"] || "",
-            referer: req.headers["referer"] || null
-        });
+    logClicks({
+      urlId: result.rows[0].id,
+      ip: req.ip ?? null,
+      userAgent: req.headers["user-agent"] || "",
+      referer: req.headers["referer"] || null,
+    });
 
-        const { id, destination_url } = result.rows[0]
+    const { id, destination_url } = result.rows[0];
 
+    await redis.set(redisCacheKey, `${id}|${destination_url}`, {
+      EX: 60 * 60 * 24,
+    }); // 24 TTL
 
-        await redis.set(redisCacheKey, `${id}|${destination_url}`, { EX: 60 * 60 * 24 }) // 24 TTL
-
-        return res.status(302).redirect(destination_url)
-    } catch (error) {
-        console.error("Error fetching destination URL:", error)
-        return res.status(500).json({ error: "Failed to fetch destination URL" })
-    }
+    return res.status(302).redirect(destination_url);
+  } catch (error) {
+    console.error("Error fetching destination URL:", error);
+    return res.status(500).json({ error: "Failed to fetch destination URL" });
+  }
 }
