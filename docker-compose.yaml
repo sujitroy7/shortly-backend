@@ -1,5 +1,6 @@
 services:
   api:
+    container_name: shortly_server
     build: .
     ports: 
       - "8000:8000"
@@ -20,7 +21,7 @@ services:
       
 
   redis:
-    image: redis:8
+    image: redis:7
     container_name: shortly_redis
     ports:
       - "6379:6379"
