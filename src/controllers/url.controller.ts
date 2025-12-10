@@ -110,3 +110,37 @@ export async function checkSlugAvailability(req: Request, res: Response) {
     return res.status(500).json({ error: "Failed to check slug availability" });
   }
 }
+
+export async function getRecentLinks(req: Request, res: Response) {
+  const userId = 1;
+  
+  // Parse and validate limit query parameter (default: 10, max: 100)
+  const requestedLimit = parseInt(req.query.limit as string, 10);
+  const limit = isNaN(requestedLimit) ? 10 : Math.min(Math.max(requestedLimit, 1), 100);
+
+  try {
+    const query = `
+      SELECT 
+        u.id,
+        u.slug,
+        u.destination_url,
+        u.created_at,
+        COUNT(c.id)::int AS click_count
+      FROM urls u
+      LEFT JOIN clicks c ON u.id = c.url_id
+      WHERE u.user_id = $1
+      GROUP BY u.id, u.slug, u.destination_url, u.created_at
+      ORDER BY u.created_at DESC
+      LIMIT $2
+    `;
+    const values = [userId, limit];
+    const result = await pool.query(query, values);
+
+    return res.status(200).json({
+      data: result.rows,
+    });
+  } catch (error) {
+    console.error("Error fetching recent links:", error);
+    return res.status(500).json({ error: "Failed to fetch recent links" });
+  }
+}
