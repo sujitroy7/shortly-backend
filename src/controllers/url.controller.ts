@@ -4,6 +4,8 @@ import { generateSlug } from "../utils/slug";
 import { redis } from "../config/redis";
 import { logClicks } from "../utils/logClick";
 import { createShortUrlSchema } from "../schemas/url.schemas";
+import { isSocialMediaBot } from "../utils/botDetector";
+import { fetchOgMetadata, generateOgHtml } from "../utils/ogFetcher";
 
 export async function createShortUrl(req: Request, res: Response) {
   const validation = createShortUrlSchema.safeParse(req.body);
@@ -40,6 +42,20 @@ export async function createShortUrl(req: Request, res: Response) {
 export async function handleRedirect(req: Request, res: Response) {
   const { slug } = req.params;
   const redisCacheKey = `url:${slug}`;
+  const userAgent = req.headers["user-agent"];
+  const isBot = isSocialMediaBot(userAgent);
+
+  // Helper function to handle the response based on whether it's a bot or human
+  const sendResponse = async (destination_url: string) => {
+    if (isBot) {
+      // For social media bots, fetch OG metadata and serve HTML
+      const metadata = await fetchOgMetadata(destination_url);
+      const html = generateOgHtml(metadata, destination_url);
+      return res.status(200).type("html").send(html);
+    }
+    // For humans, do fast 302 redirect
+    return res.status(302).redirect(destination_url);
+  };
 
   const cache = await redis.get(redisCacheKey);
 
@@ -50,10 +66,10 @@ export async function handleRedirect(req: Request, res: Response) {
       logClicks({
         urlId: Number(id),
         ip: req.ip ?? null,
-        userAgent: req.headers["user-agent"] || "",
+        userAgent: userAgent || "",
         referer: req.headers["referer"] || null,
       });
-      return res.status(302).redirect(destination_url);
+      return sendResponse(destination_url);
     }
     await redis.del(redisCacheKey);
   }
@@ -70,7 +86,7 @@ export async function handleRedirect(req: Request, res: Response) {
     logClicks({
       urlId: result.rows[0].id,
       ip: req.ip ?? null,
-      userAgent: req.headers["user-agent"] || "",
+      userAgent: userAgent || "",
       referer: req.headers["referer"] || null,
     });
 
@@ -80,7 +96,7 @@ export async function handleRedirect(req: Request, res: Response) {
       EX: 60 * 60 * 24,
     }); // 24 TTL
 
-    return res.status(302).redirect(destination_url);
+    return sendResponse(destination_url);
   } catch (error) {
     console.error("Error fetching destination URL:", error);
     return res.status(500).json({ error: "Failed to fetch destination URL" });
@@ -113,10 +129,12 @@ export async function checkSlugAvailability(req: Request, res: Response) {
 
 export async function getRecentLinks(req: Request, res: Response) {
   const userId = 1;
-  
+
   // Parse and validate limit query parameter (default: 10, max: 100)
   const requestedLimit = parseInt(req.query.limit as string, 10);
-  const limit = isNaN(requestedLimit) ? 10 : Math.min(Math.max(requestedLimit, 1), 100);
+  const limit = isNaN(requestedLimit)
+    ? 10
+    : Math.min(Math.max(requestedLimit, 1), 100);
 
   try {
     const query = `
